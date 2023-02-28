@@ -1,13 +1,18 @@
 module alu(
     input[31:0] a,
-    input[31:0] b;
+    input[31:0] b,
     input[3:0] OpCode,
-    input cin,
-    output[31:0] result,
-    output zero,
-    output cout,
-    output negative;
-    output overflow,
+    input z_in,
+    input c_in,
+    input n_in,
+    input v_in,
+    input c_from_shifter,
+    output reg[31:0] result,
+    output reg z,
+    output reg c,
+    output reg n,
+    output reg v,
+    output reg wb
 );
 
     localparam AND = 4'b0000;
@@ -27,79 +32,121 @@ module alu(
     localparam BIC = 4'b1110;
     localparam MVN = 4'b1111;
 
-    always@(a, b, OpCode, cin) begin
-        overflow <= 1'b0;
-        cout <= 1'b0;
-        case(OpCode)
-            AND: assign result <= a & b;
+    reg[31:0] neg;
 
-            EOR: assign result <= a ^ b;
+    always@(*) begin
+
+        {n, z, c, v} <= {n_in, z_in, c_in, v_in};
+
+        case(OpCode)
+            AND:begin
+                    result <= a & b;
+                    c <= c_from_shifter;
+                    wb <= 1;
+                end 
+
+            EOR:begin
+                    result <= a ^ b;
+                    c <= c_from_shifter;
+                    wb <= 1;
+                end 
 
             SUB:begin
-                    assign result <= a - b;
-                    assign cout <= a < b ? 1 : 0;
-                    assign zero = (result == 0) ? 1 : 0;
+                    neg = -b;
+                    {c,result} = a + neg;
+                    v = (a[31] & neg[31] & ~result[31]) | (~a[31] & ~neg[31] & result[31]);
+                    wb <= 1;
                 end
 
             RSB:begin
-                    assign result <= b - a;
-                    assign cout <= b < a ? 1 : 0;
-                    assign zero = (result == 0) ? 1 : 0;
+                    neg = -a;
+                    {c,result} = b + neg;
+                    v = (b[31] & neg[31] & ~result[31]) | (~b[31] & ~neg[31] & result[31]);
+                    wb <= 1; 
                 end
         
             ADD:begin
-                    assign {cout,result} <= a + b;
-                    assign zero = (result == 0) & (cout == 0) ? 1 : 0;
+                    {c,result} = a + b;
+                    v = (a[31] & b[31] & ~result[31]) | (~a[31] & ~b[31] & result[31]);
+                    wb <= 1;
                 end
 
             ADC:begin
-                    assign {cout,result} <= a + b + cin;
-                    assign zero = (result == 0) & (cout == 0) ? 1 : 0;
+                    {c,result} = a + b + c_in;
+                    v = (a[31] & b[31] & ~result[31]) | (~a[31] & ~b[31] & result[31]);
+                    wb <= 1;
                 end
 
             SBC:begin
-                    assign {cout,result} <= a - b + cin - 1;
-                    assign zero = (result == 0) & (cout == 0) ? 1 : 0;
+                    neg = -b;
+                    {c,result} = a + neg + c_in - 1;
+                    v = (a[31] & neg[31] & ~result[31]) | (~a[31] & ~neg[31] & result[31]);
+                    wb <= 1;
+     
                 end
 
             RSC:begin
-                    assign {cout,result} <= b - a + cin - 1;
-                    assign zero = (result == 0) & (cout == 0) ? 1 : 0;
+                    neg = -a;
+                    {c,result} = b + neg + c_in - 1;
+                    v = (b[31] & neg[31] & ~result[31]) | (~b[31] & ~neg[31] & result[31]); 
+                    wb <= 1;
                 end
 
             TST:begin
-                    assign zero <= ((a & b) == 0) ? 1 : 0;
+                    result <= a & b;
+                    c <= c_from_shifter;
+                    wb <= 0;
                 end
 
             TEQ:begin
-                    assign zero <= ((a ^ b) == 0) ? 1 : 0;
+                    result <= a ^ b;
+                    c <= c_from_shifter;
+                    wb <= 0;
                 end
 
             CMP:begin
-                    assign zero <= ((a - b) == 0) ? 1 : 0;
+                    neg = -b;
+                    {c,result} = a + neg;
+                    v = (a[31] & neg[31] & ~result[31]) | (~a[31] & ~neg[31] & result[31]);
+                    wb <= 0;
+
                 end
 
             CMN:begin
-                    assign zero <= ((a + b) == 0) ? 1 : 0;
+                    {c,result} = a + b;
+                    v = (a[31] & b[31] & ~result[31]) | (~a[31] & ~b[31] & result[31]);
+                    wb <= 0;
+
                 end
 
             ORR:begin
-                    assign result <= a | B;
-                    assign zero <= ((a | b) == 0) ? 1 : 0;
+                    result <= a | b;
+                    c <= c_from_shifter;
+                    wb <= 1;
                 end
 
             MOV:begin
-                    assign result <= b;
+                    result <= b;
+                    c <= c_from_shifter;
+                    wb <= 1;
                 end
 
             BIC:begin
-                    assign result <= a & ~b;
+                    result <= a & (~b);
+                    c <= c_from_shifter;
+                    wb <= 1;
                 end
 
             MVN:begin
-                    assign result <= ~b;
+                    result <= ~b;
+                    c <= c_from_shifter;
+                    wb <= 1;
                 end
                 
         endcase
+
+        n = result[31];
+        z = (result == 0);
+
     end
 endmodule
